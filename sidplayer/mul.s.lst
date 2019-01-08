@@ -1,0 +1,49 @@
+ca65 V2.16 - Git 77a8af7
+Main file   : mul.s
+Current file: mul.s
+
+000000r 1               ; taken from http://codebase64.org/doku.php?id=base:8bit_multiplication_16bit_product
+000000r 1               
+000000r 1                         .export             mulxy
+000000r 1                         .importzp           zTMP1, zTMP2, zTMP3
+000000r 1               
+000000r 1                       .segment "CODE0"
+000000r 1               
+000000r 1               ;------------------------
+000000r 1               ; 8bit * 8bit = 16bit multiply
+000000r 1               ; Multiplies "num1" by "num2" and stores result in .A (low byte, also in .X) and .Y (high byte)
+000000r 1               ; uses extra zp var "num1Hi"
+000000r 1               
+000000r 1               ; .X and .Y get clobbered.  Change the tax/txa and tay/tya to stack or zp storage if this is an issue.
+000000r 1               ;  idea to store 16-bit accumulator in .X and .Y instead of zp from bogax
+000000r 1               
+000000r 1               ; In this version, both inputs must be unsigned
+000000r 1               ; Remove the noted line to turn this into a 16bit(either) * 8bit(unsigned) = 16bit multiply.
+000000r 1               
+000000r 1  48           mulxy:    pha
+000001r 1  86 rr                  stx       zTMP1
+000003r 1  84 rr                  sty       zTMP2
+000005r 1  A9 00                  lda #$00
+000007r 1  A8                     tay
+000008r 1  84 rr                  sty       zTMP3
+00000Ar 1  F0 0D                  beq       @entloop
+00000Cr 1               
+00000Cr 1  18           @doAdd:   clc
+00000Dr 1  65 rr                  adc zTMP1
+00000Fr 1  AA                     tax
+000010r 1               
+000010r 1  98                     tya
+000011r 1  65 rr                  adc zTMP3
+000013r 1  A8                     tay
+000014r 1  8A                     txa
+000015r 1               
+000015r 1  06 rr        @loop:    asl zTMP1
+000017r 1  26 rr                  rol zTMP3
+000019r 1               @entloop:  ; accumulating multiply entry point (enter with .A=lo, .Y=hi)
+000019r 1  46 rr                  lsr zTMP2
+00001Br 1  B0 EF                  bcs @doAdd
+00001Dr 1  D0 F6                  bne @loop
+00001Fr 1  68                     pla
+000020r 1  60                     rts
+000021r 1               
+000021r 1               

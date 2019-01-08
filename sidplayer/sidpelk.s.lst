@@ -1,0 +1,924 @@
+ca65 V2.16 - Git 77a8af7
+Main file   : sidpelk.s
+Current file: sidpelk.s
+
+000000r 1                       .setcpu "6502"
+000000r 1                       .import mulxy
+000000r 1                       .exportzp zTMP1, zTMP2, zTMP3
+000000r 1               
+000000r 1               
+000000r 1               zPTR            := $60                  ; general pointer
+000000r 1               zPTR2           := $62                  ; general pointer
+000000r 1               zA_TMP          := $64
+000000r 1               zTMP0           := $65
+000000r 1               zTMP1           := $66
+000000r 1               zTMP2           := $67
+000000r 1               zTMP3           := $68
+000000r 1               zMSGTMPA        := $69
+000000r 1               zMSGIX          := $6A
+000000r 1               zMSGCOL         := $6B
+000000r 1               zMSGFG          := $6C                  ; foreground colour bitmask
+000000r 1               zMSGPTR		:= $6D
+000000r 1               zMSGPTR2	:= $6F
+000000r 1               zMSGTMP0	:= $71
+000000r 1               zMSGTMP1	:= $72
+000000r 1               zCURTUNE	:= $73
+000000r 1               
+000000r 1               EVENTV          := $220
+000000r 1               
+000000r 1               OSBYTE          := $FFF4
+000000r 1               OSASCI          := $FFE3
+000000r 1               OSFILE          := $FFDD
+000000r 1               OSCLI           := $FFF7
+000000r 1               OSWRCH          := $FFEE
+000000r 1               OSNEWL          := $FFE7
+000000r 1               
+000000r 1               TUNE_INIT       := $19F8
+000000r 1               TUNE_PLAY       := $19FA
+000000r 1               TUNE_NUM        := $19FC
+000000r 1               TUNE_BRKTAB     := $19FE
+000000r 1               TUNE_CODE       := $1A00
+000000r 1               
+000000r 1               SID_COPY_BASE   := $720
+000000r 1               SID_BASE        := $FC20
+000000r 1               
+000000r 1                       .segment "CODE0"
+000000r 1               
+000000r 1               start:
+000000r 1                               ; detect if a master and replace get char vector if necessary
+000000r 1               
+000000r 1                               ; detect if a master and replace get char vector if necessary
+000000r 1               
+000000r 1  A9 00                        lda     #0
+000002r 1  A2 01                        ldx     #1
+000004r 1  20 F4 FF                     jsr     OSBYTE
+000007r 1  E0 03                        cpx     #3
+000009r 1  90 0A                        bcc     @sk1
+00000Br 1               
+00000Br 1                               ; its a master setup char bit get vector
+00000Br 1  A9 rr                        lda     #<get_ch_bits_MA
+00000Dr 1  8D rr rr                     sta     vec_getchbits
+000010r 1  A9 rr                        lda     #>get_ch_bits_MA
+000012r 1  8D rr rr                     sta     vec_getchbits + 1
+000015r 1               
+000015r 1               @sk1:
+000015r 1  4C rr rr                     jmp main
+000018r 1               
+000018r 1               
+000018r 1               
+000018r 1  00 00 00 00  field_ctr:      .dword 0
+00001Cr 1  00           old_field_ctr:  .byte 0
+00001Dr 1  00 00        old_eventv:     .word 0
+00001Fr 1  xx xx xx xx  _osfile_blk:    .res  18
+000023r 1  xx xx xx xx  
+000027r 1  xx xx xx xx  
+000031r 1  4D 2E 4D 45  _osfile_menu_m: .byte "M.MENU", 13
+000035r 1  4E 55 0D     
+000038r 1               
+000038r 1  00           menu_sel:       .byte 0
+000039r 1  00           menu_off:       .byte 0
+00003Ar 1  00           menu_run:       .byte 0
+00003Br 1               
+00003Br 1  rr rr        vec_getchbits:  .word   get_ch_bits_BBC
+00003Dr 1               
+00003Dr 1  6C rr rr     get_ch_bits:    jmp     (vec_getchbits)
+000040r 1               
+000040r 1  B1 6D        get_ch_bits_BBC:lda     (zMSGPTR), y
+000042r 1  60                           rts
+000043r 1  08           get_ch_bits_MA: php
+000044r 1  78           		sei
+000045r 1  A5 F4                        lda     $F4
+000047r 1  48                           pha
+000048r 1  09 80                        ora     #$80
+00004Ar 1  8D 30 FE                     sta     $FE30
+00004Dr 1  A5 6E                        lda     zMSGPTR + 1
+00004Fr 1  48                           pha
+000050r 1  38                           sec
+000051r 1  E9 37                        sbc     #$C0 - $89
+000053r 1  85 6E                        sta     zMSGPTR + 1
+000055r 1  B1 6D                        lda     (zMSGPTR), Y
+000057r 1  85 69                        sta     zMSGTMPA
+000059r 1  68                           pla
+00005Ar 1  85 6E                        sta     zMSGPTR + 1;                lda     $FE30
+00005Cr 1  68           		pla
+00005Dr 1  8D 30 FE                     sta     $FE30
+000060r 1  A5 69                        lda     zMSGTMPA
+000062r 1  28                           plp
+000063r 1  60                           rts
+000064r 1               
+000064r 1               
+000064r 1               
+000064r 1  17 00 0A 20  str_coff:       .byte   23,0,10,32,0,0,0,0,0,0,$FF
+000068r 1  00 00 00 00  
+00006Cr 1  00 00 FF     
+00006Fr 1               
+00006Fr 1  A2 00        coff:           ldx     #0
+000071r 1  BD rr rr     @l1:            lda     str_coff,X
+000074r 1  30 06                        bmi     @s1
+000076r 1  20 EE FF                     jsr     OSWRCH
+000079r 1  E8                           inx
+00007Ar 1  D0 F5                        bne     @l1
+00007Cr 1  60           @s1:            rts
+00007Dr 1               
+00007Dr 1               
+00007Dr 1               main:           ; mode 6
+00007Dr 1  A9 16        		lda	#22
+00007Fr 1  20 EE FF     		jsr	OSWRCH
+000082r 1  A9 06        		lda	#6
+000084r 1  20 EE FF     		jsr	OSWRCH
+000087r 1               
+000087r 1  20 rr rr     		jsr	coff
+00008Ar 1               
+00008Ar 1               @s1:            ; cursor editing off
+00008Ar 1  A9 04                        lda     #4
+00008Cr 1  A2 01                        ldx     #1
+00008Er 1  20 F4 FF                     jsr     OSBYTE
+000091r 1               
+000091r 1                               ; load menu data
+000091r 1  A0 00                        ldy     #0
+000093r 1  A2 12                        ldx     #18
+000095r 1  A9 rr                        lda     #<_osfile_blk
+000097r 1  85 60                        sta     zPTR
+000099r 1  A9 rr                        lda     #>_osfile_blk
+00009Br 1  85 61                        sta     zPTR + 1
+00009Dr 1  A9 00                        lda     #0
+00009Fr 1  20 rr rr                     jsr     clr_blk
+0000A2r 1               
+0000A2r 1  A9 rr                        lda     #<_osfile_menu_m
+0000A4r 1  8D rr rr                     sta     _osfile_blk
+0000A7r 1  A9 rr                        lda     #>_osfile_menu_m
+0000A9r 1  8D rr rr                     sta     _osfile_blk + 1
+0000ACr 1  A9 rr                        lda     #<menu
+0000AEr 1  8D rr rr                     sta     _osfile_blk + 2
+0000B1r 1  A9 rr                        lda     #>menu
+0000B3r 1  8D rr rr                     sta     _osfile_blk + 3
+0000B6r 1  A9 FF                        lda     #$FF
+0000B8r 1  A2 rr                        ldx     #<_osfile_blk
+0000BAr 1  A0 rr                        ldy     #>_osfile_blk
+0000BCr 1  20 DD FF                     jsr     OSFILE
+0000BFr 1               
+0000BFr 1               
+0000BFr 1               init_menu:
+0000BFr 1  A9 00                        lda     #0
+0000C1r 1  8D rr rr                     sta     menu_sel
+0000C4r 1  8D rr rr                     sta     menu_off
+0000C7r 1  20 rr rr     menu_loop:      jsr     show_men
+0000CAr 1               menu_loop_nowt:
+0000CAr 1  A9 81                        lda     #$81
+0000CCr 1  A2 00                        ldx     #0
+0000CEr 1  A0 00                        ldy     #0
+0000D0r 1  20 F4 FF                     jsr     OSBYTE
+0000D3r 1  C0 1B                        cpy     #$1b
+0000D5r 1  F0 0F                        beq     @men_esc
+0000D7r 1  E0 8B                        cpx     #$8b
+0000D9r 1  F0 11                        beq     @men_up
+0000DBr 1  E0 8A                        cpx     #$8a
+0000DDr 1  F0 28                        beq     @men_dn
+0000DFr 1  E0 0D                        cpx     #13
+0000E1r 1  F0 4B                        beq     @men_sel
+0000E3r 1  4C rr rr                     jmp     menu_loop_nowt
+0000E6r 1               
+0000E6r 1               
+0000E6r 1               
+0000E6r 1  A9 7E        @men_esc:       lda     #126
+0000E8r 1  20 F4 FF                     jsr     OSBYTE          ;acknowledge esc
+0000EBr 1  60                           rts
+0000ECr 1               
+0000ECr 1  CE rr rr     @men_up:        dec     menu_sel
+0000EFr 1  30 03                        bmi     @men_up_sk1
+0000F1r 1  4C rr rr                     jmp     menu_loop
+0000F4r 1  A9 00        @men_up_sk1:    lda     #0
+0000F6r 1  8D rr rr                     sta     menu_sel
+0000F9r 1  CE rr rr                     dec     menu_off
+0000FCr 1  30 03                        bmi     @men_up_sk2
+0000FEr 1  4C rr rr                     jmp     menu_loop
+000101r 1  8D rr rr     @men_up_sk2:    sta     menu_off
+000104r 1  4C rr rr                     jmp     menu_loop
+000107r 1               
+000107r 1  EE rr rr     @men_dn:        inc     menu_sel
+00010Ar 1  A9 09                        lda     #9              ;entries on screen
+00010Cr 1  CD rr rr                     cmp     menu_sel
+00010Fr 1  90 03                        bcc     @men_dn_sk1
+000111r 1  4C rr rr                     jmp     menu_loop
+000114r 1  8D rr rr     @men_dn_sk1:    sta     menu_sel
+000117r 1  AD rr rr                     lda     menu
+00011Ar 1  18                           clc
+00011Br 1  E9 09                        sbc     #9
+00011Dr 1  EE rr rr                     inc     menu_off
+000120r 1  CD rr rr                     cmp     menu_off
+000123r 1  90 03                        bcc     @men_dn_sk2
+000125r 1  4C rr rr                     jmp     menu_loop
+000128r 1  8D rr rr     @men_dn_sk2:    sta     menu_off
+00012Br 1  4C rr rr                     jmp     menu_loop
+00012Er 1               
+00012Er 1  18           @men_sel:       clc
+00012Fr 1  AD rr rr                     lda     menu_sel
+000132r 1  6D rr rr                     adc     menu_off
+000135r 1  8D rr rr                     sta     menu_run        ; tune to play
+000138r 1  AA                           tax
+000139r 1  A0 2A                        ldy     #42
+00013Br 1  20 rr rr                     jsr     mulxy           ; menu_run *42
+00013Er 1  38                           sec                     ; add 1 to skip length byte
+00013Fr 1  8A                           txa
+000140r 1  69 rr                        adc     #<menu          ; add menu offset
+000142r 1  85 60                        sta     zPTR
+000144r 1  98                           tya
+000145r 1  69 rr                        adc     #>menu
+000147r 1  85 61                        sta     zPTR + 1
+000149r 1               
+000149r 1  A9 00                        lda     #0              ; copy file name to start of screen
+00014Br 1  85 62                        sta     zPTR2
+00014Dr 1  A9 7C                        lda     #$7C
+00014Fr 1  85 63                        sta     zPTR2 + 1
+000151r 1  A2 0A                        ldx     #10
+000153r 1  A0 00                        ldy     #0
+000155r 1  B1 60        @ll1:           lda     (zPTR),y
+000157r 1  91 62                        sta     (zPTR2),y
+000159r 1  C8                           iny
+00015Ar 1  CA                           dex
+00015Br 1  D0 F8                        bne     @ll1
+00015Dr 1  A9 0D                        lda     #13
+00015Fr 1  8D 0A 7C                     sta     $7c0a
+000162r 1               
+000162r 1                               ; copy filename in zPTR to zPTR2
+000162r 1               
+000162r 1                               ; clear osfile blk
+000162r 1  A0 00                        ldy     #0
+000164r 1  A2 12                        ldx     #18
+000166r 1  A9 rr                        lda     #<_osfile_blk
+000168r 1  85 60                        sta     zPTR
+00016Ar 1  A9 rr                        lda     #>_osfile_blk
+00016Cr 1  85 61                        sta     zPTR + 1
+00016Er 1  A9 00                        lda     #0
+000170r 1  20 rr rr                     jsr     clr_blk
+000173r 1               
+000173r 1  A9 00                        lda     #0
+000175r 1  8D rr rr                     sta     _osfile_blk
+000178r 1  A9 7C                        lda     #$7c
+00017Ar 1  8D rr rr                     sta     _osfile_blk + 1
+00017Dr 1  A9 F8                        lda     #$F8
+00017Fr 1  8D rr rr                     sta     _osfile_blk + 2
+000182r 1  A9 19                        lda     #$19
+000184r 1  8D rr rr                     sta     _osfile_blk + 3
+000187r 1  A9 FF                        lda     #$FF
+000189r 1  A2 rr                        ldx     #<_osfile_blk
+00018Br 1  A0 rr                        ldy     #>_osfile_blk
+00018Dr 1  20 DD FF                     jsr     OSFILE
+000190r 1               
+000190r 1  AD FD 19                     lda	$19FD				; default song
+000193r 1  4C rr rr                     jmp     start_tune
+000196r 1               
+000196r 1               
+000196r 1  91 60        clr_blk:        sta     (zPTR), y
+000198r 1  C8                           iny
+000199r 1  CA                           dex
+00019Ar 1  D0 FA                        bne     clr_blk
+00019Cr 1  60                           rts
+00019Dr 1               
+00019Dr 1               SCROLL_START    :=      $7100
+00019Dr 1               SCROLL_END      :=      $7600
+00019Dr 1               
+00019Dr 1               scroll:
+00019Dr 1  A2 00                        ldx     #<SCROLL_START
+00019Fr 1  8E rr rr                     stx     scroll_sta+1
+0001A2r 1  8E rr rr                     stx     scroll_sta+5
+0001A5r 1  8E rr rr                     stx     scroll_sta+9
+0001A8r 1  8E rr rr                     stx     scroll_sta+13
+0001ABr 1  A2 71                        ldx     #>SCROLL_START
+0001ADr 1  8E rr rr                     stx     scroll_sta+2
+0001B0r 1  8E rr rr                     stx     scroll_sta+6
+0001B3r 1  8E rr rr                     stx     scroll_sta+10
+0001B6r 1  8E rr rr                     stx     scroll_sta+14
+0001B9r 1               
+0001B9r 1  A2 08                        ldx     #<(SCROLL_START+8)
+0001BBr 1  8E rr rr                     stx     scroll_lda+1
+0001BEr 1  A2 71                        ldx     #>(SCROLL_START+8)
+0001C0r 1  8E rr rr                     stx     scroll_lda+2
+0001C3r 1               
+0001C3r 1  A2 00                        ldx	#0
+0001C5r 1               
+0001C5r 1               scroll_lp:
+0001C5r 1  BD FF FF     scroll_lda:	lda	$FFFF,x
+0001C8r 1  9D FF FF     scroll_sta:	sta	$FFFF,x
+0001CBr 1  E8           		inx
+0001CCr 1  9D FF FF     		sta	$FFFF,x
+0001CFr 1  E8           		inx
+0001D0r 1  9D FF FF     		sta	$FFFF,x
+0001D3r 1  E8           		inx
+0001D4r 1  9D FF FF     		sta	$FFFF,x
+0001D7r 1  E8           		inx
+0001D8r 1  D0 EB        		bne	scroll_lp
+0001DAr 1               
+0001DAr 1               
+0001DAr 1  AC rr rr     		ldy	scroll_sta+2
+0001DDr 1  C8           		iny
+0001DEr 1  8C rr rr     		sty	scroll_sta+2
+0001E1r 1  8C rr rr                     sty     scroll_sta+6
+0001E4r 1  8C rr rr                     sty     scroll_sta+10
+0001E7r 1  8C rr rr                     sty     scroll_sta+14
+0001EAr 1               
+0001EAr 1  EE rr rr     		inc	scroll_lda+2
+0001EDr 1  AD rr rr     		lda	scroll_sta+2
+0001F0r 1  C0 76        		cpy	#>SCROLL_END
+0001F2r 1  D0 D1        		bne	scroll_lp
+0001F4r 1  60           		rts
+0001F5r 1               
+0001F5r 1               
+0001F5r 1               SCROLL_RIGHT    :=      SCROLL_START + $138
+0001F5r 1               
+0001F5r 1  xx xx xx xx  		.align	256
+0001F9r 1  xx xx xx xx  
+0001FDr 1  xx xx xx     
+000200r 1  00 0F 1F 3F  hex_sprites:	.incbin "hexdigs.bin"
+000204r 1  2E 2E 2E 2E  
+000208r 1  00 0E 8E 13  
+000520r 1               
+000520r 1               
+000520r 1               show_message:
+000520r 1  20 rr rr                     jsr     scroll
+000523r 1  20 rr rr                     jsr	message1
+000526r 1               message1:
+000526r 1               
+000526r 1  A4 6A                        ldy     zMSGIX
+000528r 1  AD FE 19                     lda     $19FE
+00052Br 1  85 6F                        sta     zMSGPTR2
+00052Dr 1  AD FF 19                     lda     $19FF
+000530r 1  85 70                        sta     zMSGPTR2 + 1
+000532r 1  B1 6F        @aa:            lda     (zMSGPTR2),y
+000534r 1  F0 6F                        beq     @end
+000536r 1  30 73                        bmi     @code
+000538r 1               
+000538r 1               @dochar:
+000538r 1                               ; get pointer to char (based on $C000)
+000538r 1  38                           sec                                     ; make into index into C000 rom char table
+000539r 1  E9 20                        sbc     #32
+00053Br 1  A2 00                        ldx     #0
+00053Dr 1  86 6E                        stx     zMSGPTR + 1
+00053Fr 1               
+00053Fr 1  0A                           asl     A
+000540r 1  26 6E                        rol     zMSGPTR + 1
+000542r 1  0A                           asl     A
+000543r 1  26 6E                        rol     zMSGPTR + 1
+000545r 1  0A                           asl     A
+000546r 1  26 6E                        rol     zMSGPTR + 1
+000548r 1               
+000548r 1  85 6D                        sta     zMSGPTR
+00054Ar 1               
+00054Ar 1  A9 C0                        lda     #$C0
+00054Cr 1  18                           clc
+00054Dr 1  65 6E                        adc     zMSGPTR + 1
+00054Fr 1  85 6E                        sta     zMSGPTR + 1
+000551r 1               
+000551r 1  A9 38                        lda     #<SCROLL_RIGHT
+000553r 1  85 6F                        sta     zMSGPTR2
+000555r 1  A9 72                        lda     #>SCROLL_RIGHT
+000557r 1  85 70                        sta     zMSGPTR2+1
+000559r 1  A0 00                        ldy     #0
+00055Br 1  84 71                        sty     zMSGTMP0                           ; row counter 0..7 in src bitmap
+00055Dr 1  20 rr rr     @bmp_loop:      jsr     get_ch_bits
+000560r 1  25 6B                        and     zMSGCOL                         ; and with mask
+000562r 1  F0 02                        beq     @s1
+000564r 1  A5 6C                        lda     zMSGFG
+000566r 1  85 72        @s1:            sta     zMSGTMP1                           ; current pixels
+000568r 1  A0 03                        ldy     #3
+00056Ar 1  B1 6F                        lda     (zMSGPTR2),Y
+00056Cr 1  0A                           asl	a
+00056Dr 1  0A                           asl	a
+00056Er 1  29 CC                        and	#$CC
+000570r 1  05 72                        ora     zMSGTMP1
+000572r 1  91 6F        @l1:            sta     (zMSGPTR2),Y
+000574r 1  88                           dey
+000575r 1  10 FB                        bpl     @l1
+000577r 1               
+000577r 1  A5 71                        lda	zMSGTMP0
+000579r 1  29 01                        and	#1
+00057Br 1  D0 08                        bne	@odd_row_done
+00057Dr 1  A5 6F                        lda	zMSGPTR2
+00057Fr 1  09 04                        ora	#4
+000581r 1  85 6F                        sta	zMSGPTR2
+000583r 1  D0 0D                        bne	@s2
+000585r 1               @odd_row_done:
+000585r 1  18                           clc
+000586r 1  A5 6F                        lda     zMSGPTR2
+000588r 1  69 3C                        adc     #<($140-4)
+00058Ar 1  85 6F                        sta     zMSGPTR2
+00058Cr 1  A5 70                        lda     zMSGPTR2+1
+00058Er 1  69 01                        adc     #>($140-4)
+000590r 1  85 70                        sta     zMSGPTR2+1
+000592r 1               @s2:
+000592r 1  E6 71                        inc     zMSGTMP0
+000594r 1  A4 71                        ldy     zMSGTMP0
+000596r 1  C0 08                        cpy     #8
+000598r 1  D0 C3                        bne     @bmp_loop
+00059Ar 1               
+00059Ar 1                               ; move to next col / char
+00059Ar 1  46 6B                        lsr     zMSGCOL
+00059Cr 1  90 06                        bcc     @skdone
+00059Er 1  A9 80                        lda     #$80
+0005A0r 1  85 6B                        sta     zMSGCOL
+0005A2r 1  E6 6A                        inc     zMSGIX
+0005A4r 1               
+0005A4r 1  60           @skdone:        rts
+0005A5r 1               
+0005A5r 1               
+0005A5r 1  20 rr rr     @end:           jsr     message_reset
+0005A8r 1  4C rr rr                     jmp     @aa
+0005ABr 1               
+0005ABr 1  48           @code:          pha
+0005ACr 1  29 03        		and	#$3
+0005AEr 1  85 6C        		sta	zMSGFG
+0005B0r 1  68           		pla
+0005B1r 1  29 06        		and	#$6
+0005B3r 1  0A           		asl	a
+0005B4r 1  0A           		asl	a
+0005B5r 1  0A           		asl	a
+0005B6r 1  05 6C        		ora	zMSGFG
+0005B8r 1  85 6C        		sta	zMSGFG
+0005BAr 1               
+0005BAr 1  A9 20        		lda	#' '
+0005BCr 1  4C rr rr     		jmp	@dochar
+0005BFr 1               
+0005BFr 1               message_reset:
+0005BFr 1  A0 00                        ldy     #0
+0005C1r 1  84 6A                        sty     zMSGIX
+0005C3r 1  A9 80                        lda     #$80
+0005C5r 1  85 6B                        sta     zMSGCOL
+0005C7r 1  A9 33                        lda     #$33
+0005C9r 1  85 6C                        sta     zMSGFG
+0005CBr 1  60                           rts
+0005CCr 1               
+0005CCr 1               show_men:
+0005CCr 1                               ; set zPTR to first menu screen position
+0005CCr 1  A9 1F                        lda     #31
+0005CEr 1  20 EE FF                     jsr     OSWRCH
+0005D1r 1  A9 00                        lda     #0
+0005D3r 1  20 EE FF                     jsr     OSWRCH
+0005D6r 1  20 EE FF                     jsr     OSWRCH
+0005D9r 1               
+0005D9r 1  A9 00                        lda     #0
+0005DBr 1  85 65                        sta     zTMP0
+0005DDr 1  AD rr rr     @lp1:           lda     menu_sel
+0005E0r 1  C5 65                        cmp     zTMP0
+0005E2r 1  F0 04                        beq     @sk_colour
+0005E4r 1  A9 20                        lda     #' '
+0005E6r 1  D0 02                        bne     @sk_colour2
+0005E8r 1  A9 3E        @sk_colour:     lda     #'>'
+0005EAr 1  20 EE FF     @sk_colour2:    jsr     OSWRCH
+0005EDr 1  18                           clc             ; check to see if we're past end of menu
+0005EEr 1  A5 65                        lda     zTMP0
+0005F0r 1  6D rr rr                     adc     menu_off
+0005F3r 1  CD rr rr                     cmp     menu
+0005F6r 1  B0 2B                        bcs     @sk1
+0005F8r 1               
+0005F8r 1               
+0005F8r 1               
+0005F8r 1  AA                           tax
+0005F9r 1  A0 2A                        ldy     #42     ; size of menu entry
+0005FBr 1  20 rr rr                     jsr     mulxy
+0005FEr 1  86 62                        stx     zPTR2
+000600r 1  84 63                        sty     zPTR2 + 1
+000602r 1  18                           clc
+000603r 1  A9 rr                        lda     #<(menu + 10)     ; note l0 to skip filename
+000605r 1  65 62                        adc     zPTR2
+000607r 1  85 62                        sta     zPTR2
+000609r 1  A9 rr                        lda     #>(menu + 10)
+00060Br 1  65 63                        adc     zPTR2 + 1
+00060Dr 1  85 63                        sta     zPTR2 + 1
+00060Fr 1  A0 01                        ldy     #1              ; skip colour / length byte
+000611r 1  A2 20                        ldx     #32
+000613r 1  B1 62        @lp2:           lda     (zPTR2), y
+000615r 1  C9 20                        cmp     #' '
+000617r 1  90 03                        bcc     @s1
+000619r 1  20 EE FF                     jsr     OSWRCH
+00061Cr 1  C8           @s1:            iny
+00061Dr 1  CA                           dex
+00061Er 1  D0 F3                        bne     @lp2
+000620r 1  4C rr rr                     jmp     @sk2
+000623r 1               
+000623r 1               
+000623r 1  A2 26        @sk1:           ldx     #38
+000625r 1               
+000625r 1  A9 20        @l1:            lda     #' '
+000627r 1  20 EE FF                     jsr     OSWRCH
+00062Ar 1  CA                           dex
+00062Br 1  D0 F8                        bne     @l1
+00062Dr 1               
+00062Dr 1               @sk2:           ; move to next screen line
+00062Dr 1  20 E7 FF                     jsr     OSNEWL
+000630r 1               
+000630r 1  E6 65                        inc     zTMP0
+000632r 1  A9 13                        lda     #19
+000634r 1  C5 65                        cmp     zTMP0
+000636r 1  B0 A5                        bcs     @lp1
+000638r 1  60                           rts
+000639r 1               
+000639r 1               
+000639r 1               REGS_LINE_0	:=	$5800
+000639r 1               REGS_LINE_1	:=	REGS_LINE_0 + 960
+000639r 1               REGS_LINE_2	:=	REGS_LINE_1 + 960
+000639r 1               REGS_LINE_3	:=	REGS_LINE_2 + 960
+000639r 1               REGS_LINE_4	:=	REGS_LINE_3 + 960
+000639r 1               REGS_LINE_5	:=	REGS_LINE_4 + 960
+000639r 1               REGS_LINE_6	:=	REGS_LINE_5 + 960
+000639r 1               
+000639r 1  00 C0 80     REGS_LO_TBL:	.byte	<REGS_LINE_0, <REGS_LINE_1, <REGS_LINE_2
+00063Cr 1  40 00 C0     		.byte	<REGS_LINE_3, <REGS_LINE_4, <REGS_LINE_5
+00063Fr 1  58 5B 5F     REGS_HI_TBL:	.byte	>REGS_LINE_0, >REGS_LINE_1, >REGS_LINE_2
+000642r 1  63 67 6A     		.byte	>REGS_LINE_3, >REGS_LINE_4, >REGS_LINE_5
+000645r 1               
+000645r 1               show_sid_regs:
+000645r 1               
+000645r 1  A9 00        		lda	#0
+000647r 1  85 65        		sta	zTMP0				; voice counter
+000649r 1  A2 00        		ldx	#0				; register index
+00064Br 1               show_sid_regs_voice_lp:
+00064Br 1  20 rr rr     		jsr	show_sid_start_line
+00064Er 1               
+00064Er 1               		; freq
+00064Er 1  20 rr rr     		jsr	show_sid_16
+000651r 1               
+000651r 1               		; pulse width
+000651r 1  20 rr rr     		jsr	show_sid_16
+000654r 1               
+000654r 1               		; ctl
+000654r 1  BD 20 07     		lda	SID_COPY_BASE,X
+000657r 1  85 67        		sta	zTMP2
+000659r 1  20 rr rr     		jsr	show_sid_8
+00065Cr 1               
+00065Cr 1               		; atack dur, decay dur
+00065Cr 1  20 rr rr     		jsr	show_sid_2_nyb
+00065Fr 1               
+00065Fr 1               		; sus level, rel dur
+00065Fr 1  20 rr rr     		jsr	show_sid_2_nyb
+000662r 1               
+000662r 1  E6 65        		inc	zTMP0
+000664r 1  A4 65        		ldy	zTMP0
+000666r 1  20 rr rr     		jsr	show_sid_start_line
+000669r 1               
+000669r 1               
+000669r 1               		; ctl icons
+000669r 1  A0 07        		ldy	#7
+00066Br 1  26 67        @iconlp:	rol	zTMP2
+00066Dr 1  90 05        		bcc	@noicon
+00066Fr 1  98           		tya
+000670r 1  69 0F        		adc	#$0F
+000672r 1  D0 02        		bne	@nexticon
+000674r 1  A9 18        @noicon:	lda	#24
+000676r 1  20 rr rr     @nexticon:	jsr	big_hex_nyb
+000679r 1  88           		dey
+00067Ar 1  10 EF        		bpl	@iconlp
+00067Cr 1               
+00067Cr 1               
+00067Cr 1  E6 65        		inc	zTMP0
+00067Er 1  A5 65        		lda	zTMP0
+000680r 1  C9 06        		cmp	#6
+000682r 1  D0 C7        		bne	show_sid_regs_voice_lp
+000684r 1               
+000684r 1  60           		rts
+000685r 1               
+000685r 1               show_sid_start_line:
+000685r 1  A4 65        		ldy	zTMP0
+000687r 1  B9 rr rr     		lda	REGS_LO_TBL,Y
+00068Ar 1  85 60        		sta	zPTR
+00068Cr 1  B9 rr rr     		lda	REGS_HI_TBL,Y
+00068Fr 1  85 61        		sta	zPTR+1
+000691r 1  60           		rts
+000692r 1               
+000692r 1               show_sid_16:
+000692r 1  BD 21 07     		lda	SID_COPY_BASE+1,X
+000695r 1  20 rr rr     		jsr	big_hex_A
+000698r 1  BD 20 07     		lda	SID_COPY_BASE,X
+00069Br 1  20 rr rr     		jsr	big_hex_A
+00069Er 1  E8           		inx
+00069Fr 1  E8           		inx
+0006A0r 1  20 rr rr     		jsr	big_hex_space
+0006A3r 1  60           		rts
+0006A4r 1               
+0006A4r 1               show_sid_8:
+0006A4r 1  BD 20 07     		lda	SID_COPY_BASE,X
+0006A7r 1  20 rr rr     		jsr	big_hex_A
+0006AAr 1  E8           		inx
+0006ABr 1  20 rr rr     		jsr	big_hex_space
+0006AEr 1  60           		rts
+0006AFr 1               
+0006AFr 1               show_sid_2_nyb:
+0006AFr 1  BD 20 07     		lda	SID_COPY_BASE,X
+0006B2r 1  48           		pha
+0006B3r 1  4A           		lsr	a
+0006B4r 1  4A           		lsr	a
+0006B5r 1  4A           		lsr	a
+0006B6r 1  4A           		lsr	a
+0006B7r 1  20 rr rr     		jsr	big_hex_nyb
+0006BAr 1  20 rr rr     		jsr	big_hex_space
+0006BDr 1  68           		pla
+0006BEr 1  29 0F        		and	#$0F
+0006C0r 1  20 rr rr     		jsr	big_hex_nyb
+0006C3r 1  20 rr rr     		jsr	big_hex_space
+0006C6r 1  E8           		inx
+0006C7r 1  60           		rts
+0006C8r 1               
+0006C8r 1               
+0006C8r 1  48           big_hex_A:	pha
+0006C9r 1  4A           		lsr	a
+0006CAr 1  4A           		lsr	a
+0006CBr 1  4A           		lsr	a
+0006CCr 1  4A           		lsr	a
+0006CDr 1  20 rr rr     		jsr	big_hex_nyb
+0006D0r 1  68           		pla
+0006D1r 1  48           		pha
+0006D2r 1  29 0F        		and	#$0F
+0006D4r 1  20 rr rr     		jsr	big_hex_nyb
+0006D7r 1  68           		pla
+0006D8r 1  60           		rts
+0006D9r 1               
+0006D9r 1  85 62        big_hex_nyb:	sta	zPTR2
+0006DBr 1  48           		pha
+0006DCr 1  8A           		txa
+0006DDr 1  48           		pha
+0006DEr 1  98           		tya
+0006DFr 1  48           		pha
+0006E0r 1               
+0006E0r 1  A9 00        		lda	#0
+0006E2r 1  06 62        		asl	zPTR2
+0006E4r 1  2A           		rol	a
+0006E5r 1  06 62        		asl	zPTR2
+0006E7r 1  2A           		rol	a
+0006E8r 1  06 62        		asl	zPTR2
+0006EAr 1  2A           		rol	a
+0006EBr 1  06 62        		asl	zPTR2
+0006EDr 1  2A           		rol	a
+0006EEr 1  06 62        		asl	zPTR2
+0006F0r 1  2A           		rol	a
+0006F1r 1  69 rr        		adc	#>hex_sprites
+0006F3r 1  85 63        		sta	zPTR2+1
+0006F5r 1               
+0006F5r 1  A0 00        		ldy	#0
+0006F7r 1  20 rr rr     		jsr	big_hex_nyb_row
+0006FAr 1  18           		clc
+0006FBr 1  A5 60        		lda	zPTR
+0006FDr 1  48           		pha
+0006FEr 1  69 30        		adc	#<(320-16)
+000700r 1  85 60        		sta	zPTR
+000702r 1  A5 61        		lda	zPTR+1
+000704r 1  48           		pha
+000705r 1  69 01        		adc	#>(320-16)
+000707r 1  85 61        		sta	zPTR+1
+000709r 1  20 rr rr     		jsr	big_hex_nyb_row
+00070Cr 1  68           		pla
+00070Dr 1  85 61        		sta	zPTR+1
+00070Fr 1  68           		pla
+000710r 1  69 10        		adc	#16
+000712r 1  85 60        		sta	zPTR
+000714r 1  90 02        		bcc	@s1
+000716r 1  E6 61        		inc	zPTR+1
+000718r 1               @s1:
+000718r 1  68           		pla
+000719r 1  A8           		tay
+00071Ar 1  68           		pla
+00071Br 1  AA           		tax
+00071Cr 1  68           		pla
+00071Dr 1  60           		rts
+00071Er 1               
+00071Er 1               big_hex_nyb_row:
+00071Er 1  A2 10        		ldx	#16
+000720r 1  B1 62        @l1:		lda	(zPTR2),Y
+000722r 1  91 60        		sta	(zPTR),Y
+000724r 1  C8           		iny
+000725r 1  CA           		dex
+000726r 1  D0 F8        		bne	@l1
+000728r 1  60           		rts
+000729r 1               
+000729r 1               
+000729r 1               big_hex_space:
+000729r 1  48           		pha
+00072Ar 1  18           		clc
+00072Br 1  A5 60        		lda	zPTR
+00072Dr 1  69 08        		adc	#8
+00072Fr 1  85 60        		sta	zPTR
+000731r 1  90 02        		bcc	@s1
+000733r 1  E6 61        		inc	zPTR+1
+000735r 1  68           @s1:		pla
+000736r 1  60           		rts
+000737r 1               
+000737r 1               
+000737r 1               start_tune:
+000737r 1               @sk1:
+000737r 1  20 rr rr                     jsr     init_tune
+00073Ar 1               
+00073Ar 1  20 rr rr                     jsr     screen_play
+00073Dr 1               
+00073Dr 1                               ; setup vectors
+00073Dr 1  78                           sei                     ; disable interrupts while we mess with vectors
+00073Er 1                               ; Grab the EVENTV vector
+00073Er 1  AD 20 02                     lda     EVENTV
+000741r 1  8D rr rr                     sta     old_eventv
+000744r 1  AD 21 02                     lda     EVENTV + 1
+000747r 1  8D rr rr                     sta     old_eventv + 1
+00074Ar 1  A9 rr                        lda     #<eventv_trap
+00074Cr 1  8D 20 02                     sta     EVENTV
+00074Fr 1  A9 rr                        lda     #>eventv_trap
+000751r 1  8D 21 02                     sta     EVENTV + 1
+000754r 1               
+000754r 1  58                           cli
+000755r 1               
+000755r 1                               ; enable the vsync event
+000755r 1  A9 0E                        lda     #14
+000757r 1  A2 04                        ldx     #4
+000759r 1  20 F4 FF                     jsr     OSBYTE
+00075Cr 1               
+00075Cr 1                               ;jmp     tune_loop
+00075Cr 1               
+00075Cr 1               
+00075Cr 1  AD rr rr     tune_loop:      lda     field_ctr
+00075Fr 1  CD rr rr     @lp:            cmp     field_ctr
+000762r 1  F0 FB                        beq     @lp             ; wait for vsync
+000764r 1  AD rr rr                     lda     field_ctr
+000767r 1  8D rr rr                     sta     old_field_ctr
+00076Ar 1               
+00076Ar 1               ;                jsr     play_tune
+00076Ar 1               
+00076Ar 1               
+00076Ar 1  20 rr rr                     jsr	show_sid_regs
+00076Dr 1               
+00076Dr 1  A9 81                        lda     #$81
+00076Fr 1  A2 00                        ldx     #0
+000771r 1  A0 00                        ldy     #0
+000773r 1  20 F4 FF                     jsr     OSBYTE
+000776r 1  C0 1B                        cpy     #$1b
+000778r 1  F0 36                        beq     tune_loop_esc
+00077Ar 1  B0 10                        bcs	@sknokey
+00077Cr 1  E0 3C                        cpx	#'<'
+00077Er 1  F0 0F                        beq	tune_loop_song_prev
+000780r 1  E0 2C                        cpx	#','
+000782r 1  F0 0B                        beq	tune_loop_song_prev
+000784r 1  E0 3E                        cpx	#'>'
+000786r 1  F0 17                        beq	tune_loop_song_next
+000788r 1  E0 2E                        cpx	#'.'
+00078Ar 1  F0 13                        beq	tune_loop_song_next
+00078Cr 1               
+00078Cr 1               @sknokey:
+00078Cr 1               
+00078Cr 1               
+00078Cr 1  4C rr rr                     jmp     tune_loop
+00078Fr 1               
+00078Fr 1               tune_loop_song_prev:
+00078Fr 1  A6 73        		ldx	zCURTUNE
+000791r 1  E0 02        		cpx	#2
+000793r 1  90 C7        		bcc	tune_loop
+000795r 1  CA           		dex
+000796r 1  8A           		txa
+000797r 1  48           		pha
+000798r 1               
+000798r 1  20 rr rr     		jsr	tune_stop
+00079Br 1               
+00079Br 1  68           		pla
+00079Cr 1  4C rr rr     		jmp	start_tune
+00079Fr 1               
+00079Fr 1               tune_loop_song_next:
+00079Fr 1  A6 73        		ldx	zCURTUNE
+0007A1r 1  EC FC 19     		cpx	$19FC
+0007A4r 1  B0 B6        		bcs	tune_loop
+0007A6r 1  E8           		inx
+0007A7r 1  8A           		txa
+0007A8r 1  48           		pha
+0007A9r 1               
+0007A9r 1  20 rr rr     		jsr	tune_stop
+0007ACr 1               
+0007ACr 1  68           		pla
+0007ADr 1  4C rr rr     		jmp	start_tune
+0007B0r 1               
+0007B0r 1               
+0007B0r 1               tune_loop_esc:
+0007B0r 1  A9 7E                        lda     #126
+0007B2r 1  20 F4 FF                     jsr     OSBYTE          ;acknowledge esc
+0007B5r 1               
+0007B5r 1  20 rr rr                     jsr	tune_stop
+0007B8r 1               
+0007B8r 1  4C rr rr                     jmp     main
+0007BBr 1               
+0007BBr 1               tune_stop:
+0007BBr 1  08                           php
+0007BCr 1  78                           sei
+0007BDr 1               
+0007BDr 1  AD rr rr                     lda     old_eventv
+0007C0r 1  8D 20 02                     sta     EVENTV
+0007C3r 1  AD rr rr                     lda     old_eventv+1
+0007C6r 1  8D 21 02                     sta     EVENTV+1
+0007C9r 1               
+0007C9r 1  A9 0D                        lda     #13
+0007CBr 1  A2 04                        ldx     #4
+0007CDr 1  20 F4 FF                     jsr     OSBYTE
+0007D0r 1               
+0007D0r 1  28                           plp
+0007D1r 1               
+0007D1r 1  4C rr rr                     jmp	shut_up
+0007D4r 1               
+0007D4r 1               
+0007D4r 1               
+0007D4r 1  6C FA 19     play_tune:      jmp     (TUNE_PLAY)
+0007D7r 1  85 73        init_tune:      sta	zCURTUNE
+0007D9r 1  AA           		tax
+0007DAr 1  CA           		dex
+0007DBr 1  8A           		txa
+0007DCr 1  6C F8 19                     jmp     (TUNE_INIT)
+0007DFr 1               
+0007DFr 1               eventv_trap:
+0007DFr 1  C9 04                        cmp     #4              ; vsync
+0007E1r 1  D0 22                        bne     @sk
+0007E3r 1  EE rr rr                     inc     field_ctr       ; increment the field counter
+0007E6r 1  D0 0D                        bne     @sk2
+0007E8r 1  EE rr rr                     inc     field_ctr + 1
+0007EBr 1  D0 08                        bne     @sk2
+0007EDr 1  EE rr rr                     inc     field_ctr + 2
+0007F0r 1  D0 03                        bne     @sk2
+0007F2r 1  EE rr rr                     inc     field_ctr + 3
+0007F5r 1               
+0007F5r 1               @sk2:
+0007F5r 1  48           		pha
+0007F6r 1  8A           		txa
+0007F7r 1  48           		pha
+0007F8r 1  98           		tya
+0007F9r 1  48           		pha
+0007FAr 1  20 rr rr     		jsr     play_tune
+0007FDr 1               
+0007FDr 1  20 rr rr                     jsr     show_message
+000800r 1  68                           pla
+000801r 1  A8                           tay
+000802r 1  68                           pla
+000803r 1  AA                           tax
+000804r 1  68                           pla
+000805r 1               @sk:
+000805r 1               
+000805r 1  6C rr rr                     jmp     (old_eventv)
+000808r 1               
+000808r 1               
+000808r 1  A9 16        screen_play:    lda     #22
+00080Ar 1  20 EE FF                     jsr     OSWRCH
+00080Dr 1  A9 05                        lda     #5
+00080Fr 1  20 EE FF                     jsr     OSWRCH
+000812r 1  20 rr rr                     jsr     message_reset
+000815r 1  20 rr rr                     jsr	coff
+000818r 1               
+000818r 1  A9 13                        lda	#19
+00081Ar 1  20 EE FF                     jsr	OSWRCH
+00081Dr 1  A9 02                        lda	#2
+00081Fr 1  20 EE FF                     jsr	OSWRCH
+000822r 1  A9 02                        lda	#2
+000824r 1  20 EE FF                     jsr	OSWRCH
+000827r 1  20 rr rr                     jsr	three0
+00082Ar 1               
+00082Ar 1  A9 13                        lda	#19
+00082Cr 1  20 EE FF                     jsr	OSWRCH
+00082Fr 1  A9 03                        lda	#3
+000831r 1  20 EE FF                     jsr	OSWRCH
+000834r 1  A9 04                        lda	#4
+000836r 1  20 EE FF                     jsr	OSWRCH
+000839r 1  20 rr rr                     jsr	three0
+00083Cr 1               
+00083Cr 1  A9 1F        		lda	#31
+00083Er 1  20 EE FF     		jsr	OSWRCH
+000841r 1  A9 00        		lda	#0
+000843r 1  20 EE FF     		jsr	OSWRCH
+000846r 1  A9 1F        		lda	#31
+000848r 1  20 EE FF     		jsr	OSWRCH
+00084Br 1               
+00084Br 1  A6 73        		ldx	zCURTUNE
+00084Dr 1  A9 3C        		lda	#'<'
+00084Fr 1  E0 02        		cpx	#2
+000851r 1  B0 02        		bcs	@sge
+000853r 1  A9 20        		lda	#' '
+000855r 1  20 EE FF     @sge:		jsr	OSWRCH
+000858r 1  A6 73        		ldx	zCURTUNE
+00085Ar 1  8A           @lp:		txa
+00085Br 1  18           		clc
+00085Cr 1  69 30        		adc	#'0'
+00085Er 1  20 EE FF     		jsr	OSWRCH
+000861r 1  A9 3E        		lda	#'>'
+000863r 1  A6 73        		ldx	zCURTUNE
+000865r 1  EC FC 19     		cpx	$19FC
+000868r 1  90 02        		bcc	@slt2
+00086Ar 1  A9 20        		lda	#' '
+00086Cr 1  20 EE FF     @slt2:		jsr	OSWRCH
+00086Fr 1               
+00086Fr 1  60                           rts
+000870r 1               
+000870r 1               three0:
+000870r 1  A9 00        		lda	#0
+000872r 1  20 EE FF     		jsr	OSWRCH
+000875r 1  20 EE FF     		jsr	OSWRCH
+000878r 1  4C EE FF     		jmp	OSWRCH
+00087Br 1               
+00087Br 1               
+00087Br 1  A2 17        shut_up:	ldx	#23
+00087Dr 1  A9 00        		lda	#0
+00087Fr 1  9D 20 FC     @1:		sta	SID_BASE, X
+000882r 1  CA           		dex
+000883r 1  10 FA        		bpl	@1
+000885r 1  60           		rts
+000886r 1               
+000886r 1  xx xx xx xx  menu:           .res  1261      ; menu space 1 byte contains number of tunes followed by 10 chars of filename, 32 chars title
+00088Ar 1  xx xx xx xx  
+00088Er 1  xx xx xx xx  
+000D73r 1               
+000D73r 1               
+000D73r 1               
